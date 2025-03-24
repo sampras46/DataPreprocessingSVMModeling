@@ -1,2 +1,2 @@
 # DataPreprocessingSVMModeling
-This project applies data preprocessing, normalization, and classification techniques using R.
+This project applies data preprocessing, normalization, and classification techniques using R. It explores visualizations, transformations, and SVM modeling on bank and Star Wars datasets. It includes grid search, PCA, and gender prediction, followed by housing data classification and cross-validation techniques to assess model performance and improve predictive accuracy.

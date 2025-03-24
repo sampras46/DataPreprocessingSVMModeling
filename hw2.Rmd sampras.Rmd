@@ -1,0 +1,349 @@
+---
+title: "HW2"
+AUTHOR: "sampras"
+Date: "02/05/2025"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Ctrl+Alt+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Ctrl+Shift+K* to preview the HTML file).
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+
+
+
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+library(readr)
+library(caret)
+```
+
+
+```{r}
+# Set working directory (Update with your actual path if needed)
+setwd("C:/Users/SAM/OneDrive/Documents/data science/as2")
+
+# Load the dataset
+df <- read_csv("BankData.csv")
+
+# Remove the unnecessary index column
+df <- df %>% select(-1)  # Removes the first column
+
+# Convert Boolean-like variables ('t' and 'f') to factors
+bool_cols <- c("bool1", "bool2", "bool3", "approval")  # Boolean-like categorical columns
+df[bool_cols] <- lapply(df[bool_cols], as.factor)
+```
+
+
+
+```{r}
+# Question 1a: Visualizing the distributions of variables
+# Loop through each column and generate appropriate plots
+for (col in colnames(df)) {
+  if (is.numeric(df[[col]])) {
+    # Histogram with density plot for numeric variables
+    p <- ggplot(df, aes(x = .data[[col]])) +
+      geom_histogram(aes(y = ..density..), bins = 30, fill = "steelblue", alpha = 0.7) +
+      geom_density(color = "red", size = 1) +
+      ggtitle(paste("Histogram & Density Plot of", col)) +
+      theme_minimal()
+  } else if (is.factor(df[[col]])) {
+    # Bar plot for categorical variables
+    p <- ggplot(df, aes(x = .data[[col]])) +
+      geom_bar(fill = "skyblue") +
+      ggtitle(paste("Bar Plot of", col)) +
+      theme_minimal()
+  }
+  print(p)  # Display the plot
+}
+```
+
+
+```{r}
+# Question 1b: Applying Normalization
+# Z-score normalization for 'credit.score'
+df <- df %>%
+  mutate(credit_score_zscore = (credit.score - mean(credit.score, na.rm = TRUE)) / sd(credit.score, na.rm = TRUE))
+
+# Min-Max normalization for 'ages'
+df <- df %>%
+  mutate(ages_minmax = (ages - min(ages, na.rm = TRUE)) / (max(ages, na.rm = TRUE) - min(ages, na.rm = TRUE)))
+
+# Decimal scaling for 'cont1'
+max_cont1 <- max(abs(df$cont1), na.rm = TRUE)
+scaling_factor <- 10^floor(log10(max_cont1) + 1)  # Finds the highest power of 10
+df <- df %>%
+  mutate(cont1_decimal_scaled = cont1 / scaling_factor)
+
+# Display the transformed dataset
+head(df[, c("credit.score", "credit_score_zscore", "ages", "ages_minmax", "cont1", "cont1_decimal_scaled")])
+```
+#We applied different normalization techniques based on the distribution and scale of each variable to ensure they are comparable and optimized for machine learning models. Z-score normalization was used for credit.score because it likely follows a normal distribution. This method standardizes values around a mean of zero with a standard deviation of one, making it independent of scale and improving model performance.
+
+#For ages, we applied Min-Max normalization since it has a fixed range, such as 18 to 80 years. This technique scales values between 0 and 1 while preserving relative differences, ensuring consistency without distorting the original data.
+
+#Lastly, we used decimal scaling for cont1 because it contains large numerical values. By dividing by the highest power of 10, we keep values manageable without altering their distribution. These transformations ensure all features are standardized, making them suitable for models like SVM, which are sensitive to feature magnitudes.
+
+```{r}
+# Question 1c: Visualizing the normalized distributions
+p1 <- ggplot(df, aes(x = credit.score)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Original Credit Score Distribution") +
+  theme_minimal()
+
+p2 <- ggplot(df, aes(x = credit_score_zscore)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "blue", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Z-score Normalized Credit Score") +
+  theme_minimal()
+
+p3 <- ggplot(df, aes(x = ages)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "green", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Original Ages Distribution") +
+  theme_minimal()
+
+p4 <- ggplot(df, aes(x = ages_minmax)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "green", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Min-Max Scaled Ages") +
+  theme_minimal()
+
+p5 <- ggplot(df, aes(x = cont1)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "orange", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Original Cont1 Distribution") +
+  theme_minimal()
+
+p6 <- ggplot(df, aes(x = cont1_decimal_scaled)) +
+  geom_histogram(aes(y = ..density..), bins = 30, fill = "orange", alpha = 0.5) +
+  geom_density(color = "red", size = 1) +
+  ggtitle("Decimal Scaled Cont1") +
+  theme_minimal()
+
+# Print all plots
+print(p1)
+print(p2)
+print(p3)
+print(p4)
+print(p5)
+print(p6)
+```
+#After normalization, the visualizations show key changes. Z-score normalization (credit.score) centers the mean around 0 with a standard deviation of 1, keeping the shape unchanged. Min-Max normalization (ages) scales values between 0 and 1, compressing the range while maintaining distribution. Decimal scaling (cont1) reduces large values without altering relationships. Overall, normalization ensures a balanced scale for better model performance.
+
+```{r}
+#1d
+#We categorize credit.score into bins like Poor, Fair, Good, Very Good, and Excellent based on standard credit score ranges.
+# Binning credit score into risk categories
+df <- df %>%
+  mutate(credit_bins = case_when(
+    credit.score < 580 ~ "Poor",
+    credit.score >= 580 & credit.score < 670 ~ "Fair",
+    credit.score >= 670 & credit.score < 740 ~ "Good",
+    credit.score >= 740 & credit.score < 800 ~ "Very Good",
+    credit.score >= 800 ~ "Excellent"
+  ))
+
+# Convert the new categorical variable to a factor
+df$credit_bins <- factor(df$credit_bins, levels = c("Poor", "Fair", "Good", "Very Good", "Excellent"))
+
+# View the first few rows
+head(df[, c("credit.score", "credit_bins")])
+
+# Plot distribution of binned credit scores
+ggplot(df, aes(x = credit_bins)) +
+  geom_bar(fill = "blue", alpha = 0.7) +
+  ggtitle("Distribution of Credit Score Categories") +
+  xlab("Credit Score Categories") +
+  ylab("Count") +
+  theme_minimal()
+#We chose five bins for credit.score based on industry-standard credit risk categories used by financial institutions. These bins—Poor (300-579), Fair (580-669), Good (670-739), Very Good (740-799), and Excellent (800-850)—align with how lenders assess borrower risk. This segmentation provides meaningful distinctions while avoiding excessive granularity or oversimplification. Too many bins would make the data overly specific, while too few would lose important risk differences.
+```
+
+
+```{r}
+#1e
+# Define midpoints for each credit score category
+df <- df %>%
+  mutate(credit_smoothed = case_when(
+    credit_bins == "Poor" ~ (300 + 579) / 2,        # Midpoint of 300-579
+    credit_bins == "Fair" ~ (580 + 669) / 2,        # Midpoint of 580-669
+    credit_bins == "Good" ~ (670 + 739) / 2,        # Midpoint of 670-739
+    credit_bins == "Very Good" ~ (740 + 799) / 2,   # Midpoint of 740-799
+    credit_bins == "Excellent" ~ (800 + 850) / 2    # Midpoint of 800-850
+  ))
+
+# View the first few rows
+head(df[, c("credit.score", "credit_bins", "credit_smoothed")])
+
+# Histogram of original vs smoothed credit score
+ggplot(df, aes(x = credit.score)) +
+  geom_histogram(bins = 30, fill = "blue", alpha = 0.5) +
+  ggtitle("Original Credit Score Distribution") +
+  theme_minimal()
+
+ggplot(df, aes(x = credit_smoothed)) +
+  geom_histogram(bins = 30, fill = "red", alpha = 0.5) +
+  ggtitle("Smoothed Credit Score Distribution") +
+  theme_minimal()
+#We chose midpoint smoothing because it provides a simple, interpretable, and consistent way to convert categorical bins back into numerical values. Unlike mean smoothing, which could be affected by outliers, midpoints preserve the natural spread of the data while maintaining meaningful differences between risk categories.
+```
+
+
+
+#2a
+```{r}
+# Load necessary libraries
+library(e1071)   # For SVM
+library(caret)   # For model training & cross-validation
+library(dplyr)   # For data manipulation
+
+# Remove rows with missing values to avoid errors
+df <- na.omit(df)
+
+# Convert categorical variables to factors
+df$approval <- as.factor(df$approval)  
+df$bool1 <- as.factor(df$bool1)
+df$bool2 <- as.factor(df$bool2)
+df$bool3 <- as.factor(df$bool3)
+
+# Standardize numerical columns for better SVM performance
+num_cols <- sapply(df, is.numeric)
+df[num_cols] <- scale(df[num_cols]) 
+
+# Set up 10-fold cross-validation
+train_control <- trainControl(method = "cv", number = 10)
+
+# Train SVM model with default parameters (C = 1)
+svm_model <- train(
+  approval ~ .,  # Predict 'approval' using all other features
+  data = df,
+  method = "svmRadial",  # Radial kernel SVM
+  trControl = train_control,
+  preProcess = c("center", "scale")  # Standardize data
+)
+
+# Print model accuracy and details
+print(svm_model)
+
+```
+
+```{r}
+# Question 2b: Perform grid search to optimize C parameter
+set.seed(123)
+tune_grid <- expand.grid(C = seq(0.1, 2, by = 0.1))
+svm_model_tuned <- train(approval ~ ., data = df, method = "svmLinear",
+                          trControl = trainControl(method = "cv", number = 10),
+                          tuneGrid = tune_grid)
+print(svm_model_tuned)
+#the best parameter chosen through grid search was C = 0.1 using a Linear Kernel.
+
+#The highest accuracy achieved with this parameter was 86.33%, with a Kappa score of 0.7286.
+
+#Interestingly, the accuracy remained constant across all values of C (0.1 to 2.0), suggesting that C has little effect on performance for this dataset with a linear kernel. This could mean that the data is well-separated, and increasing C does not significantly impact decision boundaries. 
+```
+
+
+#2c-The accuracy for C = 1 may differ in (b) even though it was included in (a) due to variations in cross-validation splits, as different training and testing partitions can lead to slight performance changes. Additionally, hyperparameter tuning in grid search evaluates multiple values of C, which can influence model optimization differently than using a fixed C = 1. Optimization differences in the SVM solver, along with potential class imbalances in the dataset, may also contribute to these variations. Lastly, some degree of randomness in training, even when using the same parameter, can lead to minor fluctuations in accuracy.
+
+
+
+```{r}
+# Question 3a: Load and prepare the Star Wars dataset
+data(starwars, package = "dplyr")
+starwars <- starwars %>% select(-films, -vehicles, -starships, -name) %>% na.omit()
+
+# Convert categorical variables to dummy variables (excluding 'gender')
+starwars_dummy <- starwars %>% select(-gender) %>% mutate_if(is.character, as.factor)
+starwars_dummy <- model.matrix(~ . -1, data = starwars_dummy)
+starwars_final <- data.frame(starwars_dummy, gender = starwars$gender)
+```
+
+
+
+```{r}
+# Question 3b: Apply SVM to predict gender
+set.seed(123)
+svm_gender <- train(gender ~ ., data = starwars_final, method = "svmLinear",
+                     trControl = trainControl(method = "cv", number = 10))
+print(svm_gender)
+```
+
+
+```{r}
+# Question 3c: Apply PCA for dimensionality reduction
+pca_model <- prcomp(starwars_final %>% select(-gender), center = TRUE, scale. = TRUE)
+summary(pca_model)
+
+# Select number of components based on variance explained
+starwars_pca <- data.frame(pca_model$x[, 1:5], gender = starwars_final$gender)
+```
+
+
+```{r}
+# Question 3d: Train SVM on PCA-transformed data
+set.seed(123)
+svm_pca <- train(gender ~ ., data = starwars_pca, method = "svmLinear",
+                 trControl = trainControl(method = "cv", number = 10))
+print(svm_pca)
+```
+
+#Bonus Questions 
+```{r}
+# Question 4a: Load and Explore Sacramento Housing Data
+data(Sacramento, package = "caret")
+
+# Remove 'zip' and 'city' columns
+Sacramento <- Sacramento %>% select(-zip, -city)
+
+# Check class balance
+table(Sacramento$type)
+```
+
+
+
+```{r}
+# Question 4b: Normalize 'price' using log transformation
+Sacramento <- Sacramento %>%
+  mutate(log_price = log(price))
+```
+
+
+```{r}
+# Question 4c: Apply SVM to predict 'type' and evaluate with grid search
+set.seed(123)
+tune_grid <- expand.grid(C = seq(0.1, 2, by = 0.1))
+train_control <- trainControl(method = "cv", number = 10)
+svm_model <- train(type ~ ., data = Sacramento, method = "svmLinear",
+                    trControl = train_control, tuneGrid = tune_grid)
+print(svm_model)
+```
+
+
+```{r}
+# Question 5: Partition 'mtcars' into 5 folds and visualize 'gears' distribution
+set.seed(123)
+mycars <- mtcars
+mycars$folds <- 0
+flds <- createFolds(1:nrow(mycars), k = 5, list = TRUE)
+for (i in 1:5) { mycars$folds[flds[[i]]] <- i }
+
+ggplot(mycars, aes(x = factor(folds), fill = factor(gear))) +
+  geom_bar(position = "dodge") +
+  ggtitle("Distribution of 'gears' Across 5 Folds") +
+  theme_minimal()
+
+```
+
